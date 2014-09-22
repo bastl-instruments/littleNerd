@@ -1,29 +1,51 @@
 /*
- * sekvojHW-settings.h
+ * littleNerdHW-settings.h
  *
  *  Created on: 15.07.2014
  *      Author: user
  */
 
-#ifndef SEKVOJHW_SETTINGS_H_
-#define SEKVOJHW_SETTINGS_H_
+#ifndef LITTLENERDHW_SETTINGS_H_
+#define LITTLENERDHW_SETTINGS_H_
 
 // used pins
-#define SHIFTREGISTER_SER C,5
-#define SHIFTREGISTER_RCK B,1
-#define SHIFTREGISTER_SRCK B,0
+#define SHIFTREGISTER_SER D,3
+#define SHIFTREGISTER_RCK D,4
+#define SHIFTREGISTER_SRCK D,5
+/*
+#define CLOCK_PIN 5
+#define LATCH_PIN 4
+#define DATA_PIN 3
+*/
+#define ANALOG_PIN_1 5
+#define ANALOG_PIN_2 4
+#define ANALOG_PIN_3 3
 
-#define BUTTONCOL_0 C,3
-#define BUTTONCOL_1 D,4
-#define BUTTONCOL_2 D,2
-#define BUTTONCOL_3 D,7
+#define ANALOG_PIN_4 2
+#define ANALOG_PIN_5 1
+#define ANALOG_PIN_6 0
+/*
+#define ANALOG_PIN_1 C,5
+#define ANALOG_PIN_2 C,4
+#define ANALOG_PIN_3 C,3
 
-#define LEDCOL_0 C,4
-#define LEDCOL_1 D,5
-#define LEDCOL_2 D,3
-#define LEDCOL_3 D,6
+#define ANALOG_PIN_4 C,2
+#define ANALOG_PIN_5 C,1
+#define ANALOG_PIN_6 C,0
+*/
 
-#define CLOCK_IN_PIN C,0
+#define INPUT_1 D,2
+#define INPUT_2 D,7
+
+
+#define BUTTON_PIN_1 B,2
+#define BUTTON_PIN_2 B,1
+
+#define LED_R_PIN B,0
+#define LED_G_PIN 6
+#define LED_B_PIN 7
+
+
 
 /*
 #define BUTTON_PIN 	17
@@ -68,4 +90,4 @@
 // debug Pin
 #define PIN D,3
 
-#endif /* SEKVOJHW_SETTINGS_H_ */
+#endif /* LITTLENERDHW_SETTINGS_H_ */

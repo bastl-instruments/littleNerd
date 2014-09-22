@@ -1,38 +1,66 @@
 
-#include "sekvojHW_settings.h"
+#include "littleNerdHW_settings.h"
 
-#ifndef SEKVOJHW_H_
-#define SEKVOJHW_H_
+#ifndef LITTLENERDHW_H_
+#define LITTLENERDHW_H_
 
 #include <IHWLayer.h>
 #include <Arduino.h>
+#include <avr/pgmspace.h>
+
+#define BLACK_BITS 0
+#define RED_BITS 1
+#define GREEN_BITS 2
+#define BLUE_BITS 4
+#define YELLOW_BITS 3
+#define MAGENTA_BITS 5
+#define CIAN_BITS 6
+#define WHITE_BITS 7
 
 
-class sekvojHW : public IHWLayer {
+#define NUMBER_OF_COLORS 8
 
-enum TriggerState{ON,OFF};
+
+#define BLACK 0
+#define RED 1
+#define GREEN 2
+#define BLUE 3
+#define YELLOW 4
+#define MAGENTA 5
+#define CIAN 6
+#define WHITE 7
+
+
+
+class littleNerdHW : public IHWLayer {
+
 
 public:
+	enum TriggerState{ON,OFF};
+
 
 	// sets up all the pins, timers and SPI interface
 	// call this before using any other method from this class
-	void init(void(*buttonChangeCallback)(uint8_t number), void(*clockInCallback)());
+	void init(void(*buttonChangeCallback)(uint8_t number), void(*clockInCallback)(uint8_t number));
 
 	/***KNOBS***/
 
-	//Disabled function in SEKVOJ
-	virtual uint8_t getKnobValue(uint8_t index){return 0;};
+	//
+	virtual uint8_t getKnobValue(uint8_t index);
 
 	/***LEDS***/
 
-	// set the state of a led
+	// disabled
 	virtual void setLED(uint8_t number, IHWLayer::LedState state);
 
-	// set the state of a led
+	// disabled
 	virtual void setLED(uint8_t number, uint8_t number2, uint8_t number3 = 0) {}
 
 	// print the state arrays to the Serial terminal
 	void printLEDStates();
+
+	// set color of RGB led
+	void setColor(uint8_t _COLOR);
 
 
 	/***BUTTONS***/
@@ -44,6 +72,10 @@ public:
 	void printButtonStates();
 	/***TRIGGER***/
 	void setTrigger(uint8_t number, TriggerState state, uint8_t pulseWidth=0);
+
+	bool getTriggerState(uint8_t number);
+
+
 
 
 	/***RAM***/
@@ -81,8 +113,9 @@ public:
 	// only called by ISR routine.
 	// they would be declared private but this would prevent the ISR from accessing them
 	// there are workarounds for this but as they come at a cost I just left it like this
-	void isr_updateNextLEDRow();
+
 	void isr_updateButtons();
+	void isr_updateKnobs();
 	void isr_updateTriggerStates();
 	void isr_updateClockIn();
 
@@ -99,17 +132,15 @@ private:
 	/**TIMING**/
 	uint16_t bastlCycles;
 
-	/**LEDS**/
-	uint8_t ledStatesBeg[4];
-	uint8_t ledStatesEnd[4];
 
 
 	/**BUTTONS**/
-	uint8_t newButtonStates[4];
-	uint8_t buttonStates[4];
+	bool newButtonStates[2];
+	bool buttonStates[2];
+	uint8_t knobValues[6];
 	void compareButtonStates();
 	void (*buttonChangeCallback)(uint8_t number);
-	void (*clockInCallback)();
+	void (*clockInCallback)(uint8_t number);
 
 	/**TRIGGERS**/
 	uint8_t trigState;

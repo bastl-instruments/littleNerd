@@ -1,18 +1,20 @@
 
 /*** PERMANENT SETTINGS***/
 
-#include "sekvojHW_settings.h"
+#include "littleNerdHW_settings.h"
 
 
 /*** ACTUAL CODE ***/
 
 #include <Arduino.h>
-#include "sekvojHW.h"
+#include "littleNerdHW.h"
 #include <shiftRegisterFast.h>
+#include <avr/pgmspace.h>
+
 //#include <SdFat.h>
 
 // Declaration of instance (for use in interrupt service routine)
-sekvojHW hardware;
+littleNerdHW hardware;
 
 
 #define UINT16_MAX 65535
@@ -33,52 +35,42 @@ static const uint8_t buttons_rows = 8;
 static const uint8_t rowsTotal = 4; // for calculation of update frequency timer
 
 
+//prog_uchar colorBit[NUMBER_OF_COLORS] PROGMEM = {
+
+uint8_t colorBit[NUMBER_OF_COLORS]= {
+
+  BLACK_BITS, RED_BITS,GREEN_BITS,BLUE_BITS,YELLOW_BITS,MAGENTA_BITS,CIAN_BITS,WHITE_BITS
+
+};
 
 
+unsigned char analogPin[6]={
+  ANALOG_PIN_1, ANALOG_PIN_2, ANALOG_PIN_3,  ANALOG_PIN_4, ANALOG_PIN_5, ANALOG_PIN_6};
 
-void sekvojHW::init(void(*buttonChangeCallback)(uint8_t number),void(*clockInCallback)()) {
+void littleNerdHW::init(void(*buttonChangeCallback)(uint8_t number),void(*clockInCallback)(uint8_t number)) {
 
 	cli();
 
 	shiftRegFast::setup();
 
-	// BUTTONS
-	bit_dir_inp(BUTTONCOL_0);
-	bit_dir_inp(BUTTONCOL_1);
-	bit_dir_inp(BUTTONCOL_2);
-	bit_dir_inp(BUTTONCOL_3);
 
 
 
-	bit_dir_outp(LEDCOL_0);
-	bit_dir_outp(LEDCOL_1);
-	bit_dir_outp(LEDCOL_2);
-	bit_dir_outp(LEDCOL_3);
+	bit_dir_inp(INPUT_1);
+	bit_dir_inp(INPUT_2);
+	bit_dir_inp(BUTTON_PIN_1);
+	bit_dir_inp(BUTTON_PIN_2);
 
 
-	bit_set(BUTTONCOL_0);
-	bit_set(BUTTONCOL_1);
-	bit_set(BUTTONCOL_2);
-	bit_set(BUTTONCOL_3);
 
-	bit_clear(LEDCOL_0);
-	bit_clear(LEDCOL_1);
-	bit_clear(LEDCOL_2);
-	bit_clear(LEDCOL_3);
-
-	bit_dir_inp(CLOCK_IN_PIN);
-	bit_clear(CLOCK_IN_PIN);
+	bit_dir_outp(LED_R_PIN);
 
 
-	// LEDS
-	for (uint8_t row=0; row<leds_rows; row++) {
-		ledStatesBeg[row] =  1<<(15-row);    				//set row hit high
-		ledStatesBeg[row] |= (B00001111<<8) | (B11111111); //disable all rows
-
-		ledStatesEnd [row] = ledStatesBeg[row]; 			// copy to second set of states
-	}
-
-
+	bit_set(INPUT_1);
+	bit_set(INPUT_2);
+	bit_set(BUTTON_PIN_1);
+	bit_set(BUTTON_PIN_2);
+	bit_set(LED_R_PIN);
 
 
 	// store callback pointer for changed buttons
@@ -103,162 +95,58 @@ void sekvojHW::init(void(*buttonChangeCallback)(uint8_t number),void(*clockInCal
 
 /**** LEDS ****/
 
-void sekvojHW::printLEDStates() {
-	for (uint8_t row=0; row<leds_rows; row++) {
-		Serial.print("Row "); Serial.print(row,DEC);Serial.print(": ");
-		for (int8_t col=15; col>=0;col--) {
-			if (bitRead(ledStatesBeg[row],col)) {
-				Serial.print("1");
-			} else {
-				Serial.print("0");
-			}
-		}
-		Serial.println("");
-		Serial.print("    "); Serial.print(row,DEC);Serial.print(": ");
-		for (int8_t col=15; col>=0;col--) {
-			if (bitRead(ledStatesEnd[row],col)) {
-				Serial.print("1");
-			} else {
-				Serial.print("0");
-			}
-		}
-		Serial.println("");
-	}
+void littleNerdHW::printLEDStates() {
+
 }
 
 
+void littleNerdHW::setLED(uint8_t number, IHWLayer::LedState state) {
 
-/*void sekvojHW::leds_setStates(uint16_t ledStates[]) {
-	for (uint8_t row = 0; row<leds_rows; row++) {
-		this->ledStatesBeg[row]=ledStates[row];
-
-	}
-}*/
-
-
-void sekvojHW::setLED(uint8_t number, IHWLayer::LedState state) {
-
-	if ((state == IHWLayer::ON) | (state==IHWLayer::BLINK) | (state==IHWLayer::DULLON)) {
-		ledStatesBeg[number/leds_cols] &= ~(1<<(number%leds_cols));
-	} else {
-		ledStatesBeg[number/leds_cols] |= (1<<(number%leds_cols));
-
-	}
-
-	if ((state == IHWLayer::ON) | (state== IHWLayer::BLINK_INVERT)) {
-		ledStatesEnd[number/leds_cols] &= ~(1<<(number%leds_cols));
-	} else {
-		ledStatesEnd[number/leds_cols] |= (1<<(number%leds_cols));
-
-	}
 }
 
+void littleNerdHW::setColor(unsigned char _COLOR){
 
+  //unsigned char _bits=pgm_read_word_near(colorBit + _COLOR)	;
+	unsigned char _bits=colorBit[_COLOR];
 
-void sekvojHW::isr_updateNextLEDRow() {
+  if(bitRead(_bits,0)) bit_set(LED_R_PIN);
+  else bit_clear(LED_R_PIN);
+  bitWrite(trigState,LED_G_PIN,bitRead(_bits,1));
+  bitWrite(trigState,LED_B_PIN,bitRead(_bits,2));
 
-
-
-	static uint8_t currentRow = 0;
-	static uint8_t blinkCounter = 0;
-	/*
-	bit_clear(LEDCOL_0);
-	bit_clear(LEDCOL_1);
-	bit_clear(LEDCOL_2);
-	bit_clear(LEDCOL_3);
-	*/
-
-
-
-	if (blinkCounter < blinkCompare[0]) {
-
-		shiftRegFast::write_8bit(ledStatesBeg[currentRow]);
-	} else {
-		shiftRegFast::write_8bit(ledStatesEnd[currentRow]);
-	}
-
-	shiftRegFast::write_8bit(trigState);
-	shiftRegFast::enableOutput();
-
-	// go no next row
-
-
-	switch(currentRow){
-
-	case 0:
-		bit_set(LEDCOL_0);
-		break;
-	case 1:
-		bit_set(LEDCOL_1);
-		break;
-	case 2:
-		bit_set(LEDCOL_2);
-		break;
-	case 3:
-		bit_set(LEDCOL_3);
-		break;
-
-	}
-
-	currentRow=(currentRow+1)%leds_rows;
-	if (currentRow == 0) blinkCounter = (blinkCounter+1)%blinkCompare[1];
 }
+
 
 
 
 /**** BUTTONS ****/
 
 
-void sekvojHW::isr_updateButtons() {
-
-	bit_clear(LEDCOL_0);
-	bit_clear(LEDCOL_1);
-	bit_clear(LEDCOL_2);
-	bit_clear(LEDCOL_3);
+void littleNerdHW::isr_updateButtons() {
 
 
-	for (int8_t row=7; row>=0; row--) {
-		shiftRegFast::write_8bit(~(1<<row));
-		shiftRegFast::write_8bit(trigState);
-		shiftRegFast::enableOutput();
-
-
-		uint8_t col = 0;
-
-		bitWrite(newButtonStates[col], row, !bit_read_in(BUTTONCOL_0));
-		col++;
-		bitWrite(newButtonStates[col], row, !bit_read_in(BUTTONCOL_1));
-		col++;
-		bitWrite(newButtonStates[col], row, !bit_read_in(BUTTONCOL_2));
-		col++;
-		bitWrite(newButtonStates[col], row, !bit_read_in(BUTTONCOL_3));
-
-
-		//col++;
-	}
+	newButtonStates[0]=bit_read_in(BUTTON_PIN_1);
+	newButtonStates[1]=bit_read_in(BUTTON_PIN_2);
 
 	compareButtonStates();
 
 }
 
-void sekvojHW::compareButtonStates(){
+void littleNerdHW::compareButtonStates(){
 	if(buttonChangeCallback!=0){
-		for(int col=0;col<4;col++){
-			if(uint8_t xored=newButtonStates[col]^buttonStates[col]){
-				for(int row=0;row<8;row++){
-					if(bitRead(xored,row)) buttonChangeCallback(col*buttons_rows + row);
-				}
-			}
-			buttonStates[col]=newButtonStates[col];
+
+		for(int i=0;i<2;i++){
+			if(buttonStates[i]!=newButtonStates[i]) buttonChangeCallback(i);
 		}
+
 	}
-	for(int col=0;col<4;col++) buttonStates[col]=newButtonStates[col];
+	for(int i=0;i<2;i++) buttonStates[i]=newButtonStates[i];
 
 
 }
 
 
-void sekvojHW::printButtonStates() {
+void littleNerdHW::printButtonStates() {
 	for (uint8_t row=0; row<4; row++) {
 		Serial.print("col "); Serial.print(row,DEC);Serial.print(": ");
 		for (int8_t col=7; col>=0;col--) {
@@ -272,9 +160,9 @@ void sekvojHW::printButtonStates() {
 	}
 }
 
-IHWLayer::ButtonState sekvojHW::getButtonState(uint8_t number) {
+IHWLayer::ButtonState littleNerdHW::getButtonState(uint8_t number) {
 
-	if ((buttonStates[number/buttons_rows] & (1<<(number%buttons_rows)))) {
+	if (buttonStates[number] ) {
 		return IHWLayer::UP;
 	} else {
 		return IHWLayer::DOWN;
@@ -284,16 +172,36 @@ IHWLayer::ButtonState sekvojHW::getButtonState(uint8_t number) {
 
 
 /**** TRIGGER ****/
-void sekvojHW::setTrigger(uint8_t number, sekvojHW::TriggerState state, uint8_t pulseWidth){
+void littleNerdHW::setTrigger(uint8_t number, littleNerdHW::TriggerState state, uint8_t pulseWidth){
 	triggerCountdown[number]=pulseWidth;
 		if(state==ON) bitWrite(trigState,number,1);
 		if(state==OFF) bitWrite(trigState,number,0);
 }
 
-void sekvojHW::isr_updateTriggerStates(){
+bool littleNerdHW::getTriggerState(uint8_t number){
+		return bitRead(trigState,number);
 
+};
 
-	for(int i=0;i<8;i++){
+uint8_t littleNerdHW::getKnobValue(uint8_t index){
+	return knobValues[index];
+
+}
+
+void littleNerdHW::isr_updateKnobs(){
+	static uint8_t knobCount;
+	knobCount++;
+	if(knobCount>=6) knobCount=0;
+	knobValues[knobCount]=analogRead(analogPin[knobCount])>>2;
+
+}
+
+void littleNerdHW::isr_updateTriggerStates(){
+
+	shiftRegFast::write_8bit(trigState);
+	shiftRegFast::enableOutput();
+
+	for(int i=0;i<6;i++){
 		if(triggerCountdown[i]>0){
 			if(triggerCountdown[i]==1) setTrigger(i,OFF,0);
 			triggerCountdown[i]--;
@@ -301,22 +209,27 @@ void sekvojHW::isr_updateTriggerStates(){
 	}
 
 }
-void sekvojHW::isr_updateClockIn(){
+
+void littleNerdHW::isr_updateClockIn(){
 	if(clockInCallback!=0){
-		static bool clockInState;
-		bool newState=!bit_read_in(CLOCK_IN_PIN);
-		if(newState && !clockInState) clockInCallback();
-		clockInState=newState;
+		static bool clockInState[2];
+		bool newState=!bit_read_in(INPUT_1);
+		if(newState && !clockInState[0]) clockInCallback(0);
+		clockInState[0]=newState;
+
+		newState=!bit_read_in(INPUT_2);
+		if(newState && !clockInState[1]) clockInCallback(1);
+		clockInState[1]=newState;
 	}
 }
 
 /**** TIMING ****/
 
-uint16_t sekvojHW::getElapsedBastlCycles() {
+uint16_t littleNerdHW::getElapsedBastlCycles() {
 	return bastlCycles;
 }
 
-uint16_t sekvojHW::getBastlCyclesPerSecond() {
+uint16_t littleNerdHW::getBastlCyclesPerSecond() {
 	return (F_CPU/1024)/OCR2A;
 }
 
@@ -328,11 +241,11 @@ ISR(TIMER2_COMPA_vect) {
 
 	//bit_set(PIN);
 	hardware.incrementBastlCycles();
-	//hardware.isr_sendDisplayBuffer();  // ~156us
 	hardware.isr_updateClockIn();
+	hardware.isr_updateKnobs();
 	hardware.isr_updateTriggerStates();
 	hardware.isr_updateButtons();      // ~1ms
-	hardware.isr_updateNextLEDRow();   // ~84us
+	//hardware.isr_updateNextLEDRow();   // ~84us
 
 	//bit_clear(PIN);
 
