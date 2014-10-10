@@ -25,9 +25,9 @@
 #define RED 1
 #define GREEN 2
 #define BLUE 3
-#define YELLOW 4
+#define YELLOW 6
 #define MAGENTA 5
-#define CIAN 6
+#define CIAN 4
 #define WHITE 7
 
 
@@ -47,6 +47,14 @@ public:
 
 	//
 	virtual uint8_t getKnobValue(uint8_t index);
+	uint8_t getLastKnobValue(uint8_t index){return lastKnobValues[index];}
+	bool knobMoved(uint8_t index);
+	bool knobFreezed(uint8_t index);
+	void freezeAllKnobs();
+	void freezeKnob(uint8_t index);
+	void freezeKnob(uint8_t index, uint8_t value);
+	void unfreezeKnob(uint8_t index);
+
 
 	/***LEDS***/
 
@@ -71,7 +79,7 @@ public:
 	// print the read button states to serial terminal
 	void printButtonStates();
 	/***TRIGGER***/
-	void setTrigger(uint8_t number, TriggerState state, uint8_t pulseWidth=0);
+	void setTrigger(uint8_t number, TriggerState state, uint16_t pulseWidth=0);
 
 	bool getTriggerState(uint8_t number);
 
@@ -100,7 +108,7 @@ public:
 	// the number of bastl cycles elapsed since startup
 	// this number will overflow after some minutes; you have to deal with that in the layer above
 	// using a longer datatype would prevent this but at the cost of longer computation time
-	uint16_t getElapsedBastlCycles();
+	uint32_t getElapsedBastlCycles();
 
 	// returns the relation between bastl cycles and seconds
 	// this value is dependent on the hardware update frequency that you can set by a define
@@ -118,6 +126,7 @@ public:
 	void isr_updateKnobs();
 	void isr_updateTriggerStates();
 	void isr_updateClockIn();
+	void resetTriggers();
 
 	inline void incrementBastlCycles() {bastlCycles++;}
 
@@ -130,21 +139,28 @@ public:
 
 private:
 	/**TIMING**/
-	uint16_t bastlCycles;
+	uint32_t bastlCycles;
+	bool inBetween(uint8_t value, uint8_t border1, uint8_t border2);
 
 
 
 	/**BUTTONS**/
+	uint8_t knobFreezeHash;
+	uint8_t knobMovedHash;
+	uint8_t buttonHash;
 	bool newButtonStates[2];
 	bool buttonStates[2];
-	uint8_t knobValues[6];
+	uint16_t knobValues[6];
+	uint16_t lastKnobValues[6];
+	uint8_t knobFreezeValues[6];
+	uint8_t knobCount;
 	void compareButtonStates();
 	void (*buttonChangeCallback)(uint8_t number);
 	void (*clockInCallback)(uint8_t number);
 
 	/**TRIGGERS**/
 	uint8_t trigState;
-	uint8_t triggerCountdown[8];
+	uint16_t triggerCountdown[8];
 
 
 

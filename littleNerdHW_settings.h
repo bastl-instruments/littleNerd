@@ -4,6 +4,7 @@
  *  Created on: 15.07.2014
  *      Author: user
  */
+#include <Arduino.h>
 
 #ifndef LITTLENERDHW_SETTINGS_H_
 #define LITTLENERDHW_SETTINGS_H_
@@ -65,7 +66,9 @@
 // the frequency at which the leds are updated.
 // when set too high, resources are wasted, when set too low flikering occurs
 // the value is in hertz and can be set from 16 to 255
-#define FREQ 50
+
+static const uint16_t updateFreq = 2014;  // because its cool dude ! - please update next year
+
 
 
 // properties of the led blinking

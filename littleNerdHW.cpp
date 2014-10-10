@@ -10,6 +10,10 @@
 #include "littleNerdHW.h"
 #include <shiftRegisterFast.h>
 #include <avr/pgmspace.h>
+#include <fastAnalogRead.h>
+#define PIN B,5
+#define KNOB_MOVED_TOLERANCE 1
+//using namespace fastAnalogRead;
 
 //#include <SdFat.h>
 
@@ -20,26 +24,13 @@ littleNerdHW hardware;
 #define UINT16_MAX 65535
 #define MAX_ADDR 131067
 
-// set by defines
-static const uint8_t updateFreq = FREQ;
-static const uint8_t blinkCompare[2] = {blinkDuty,blinkTotal};
-
-// set by hardware
-// cols are numbers of elements that are read 'at the same time'
-// rows are multiplexed in time
-static const uint8_t leds_cols = 8;
-static const uint8_t leds_rows = 4;
-static const uint8_t buttons_cols = 4;
-static const uint8_t buttons_rows = 8;
-
-static const uint8_t rowsTotal = 4; // for calculation of update frequency timer
 
 
 //prog_uchar colorBit[NUMBER_OF_COLORS] PROGMEM = {
 
 uint8_t colorBit[NUMBER_OF_COLORS]= {
 
-  BLACK_BITS, RED_BITS,GREEN_BITS,BLUE_BITS,YELLOW_BITS,MAGENTA_BITS,CIAN_BITS,WHITE_BITS
+  BLACK_BITS, RED_BITS,GREEN_BITS,BLUE_BITS,CIAN_BITS,MAGENTA_BITS,YELLOW_BITS,WHITE_BITS
 
 };
 
@@ -64,6 +55,7 @@ void littleNerdHW::init(void(*buttonChangeCallback)(uint8_t number),void(*clockI
 
 
 	bit_dir_outp(LED_R_PIN);
+	bit_dir_outp(PIN); //debug
 
 
 	bit_set(INPUT_1);
@@ -85,8 +77,15 @@ void littleNerdHW::init(void(*buttonChangeCallback)(uint8_t number),void(*clockI
 	TCCR2A = (1 << WGM21);  // turn on CTC mode
 	TIMSK2 |= (1 << OCIE2A);// enable interrupt
 	TCCR2B = B00000111;	    //prescaler = 1024
-	OCR2A = (F_CPU/1024)/(updateFreq*rowsTotal);
+	OCR2A = (F_CPU/1024)/(updateFreq);
 	TCNT2  = 0;
+
+	fastAnalogRead::init(); // for analog read
+	knobCount=0;
+	fastAnalogRead::connectChannel(knobCount);
+	fastAnalogRead::startConversion();
+	knobFreezeHash=255;
+	knobMovedHash=0;
 
 
 	sei();
@@ -109,10 +108,10 @@ void littleNerdHW::setColor(unsigned char _COLOR){
   //unsigned char _bits=pgm_read_word_near(colorBit + _COLOR)	;
 	unsigned char _bits=colorBit[_COLOR];
 
-  if(bitRead(_bits,0)) bit_set(LED_R_PIN);
+  if(!bitRead(_bits,0)) bit_set(LED_R_PIN);
   else bit_clear(LED_R_PIN);
-  bitWrite(trigState,LED_G_PIN,bitRead(_bits,1));
-  bitWrite(trigState,LED_B_PIN,bitRead(_bits,2));
+  bitWrite(trigState,LED_G_PIN,!bitRead(_bits,1));
+  bitWrite(trigState,LED_B_PIN,!bitRead(_bits,2));
 
 }
 
@@ -136,11 +135,11 @@ void littleNerdHW::compareButtonStates(){
 	if(buttonChangeCallback!=0){
 
 		for(int i=0;i<2;i++){
-			if(buttonStates[i]!=newButtonStates[i]) buttonChangeCallback(i);
+			if(buttonStates[i]!=newButtonStates[i]) buttonStates[i]=newButtonStates[i],buttonChangeCallback(i);
 		}
 
 	}
-	for(int i=0;i<2;i++) buttonStates[i]=newButtonStates[i];
+	//for(int i=0;i<2;i++) ;
 
 
 }
@@ -172,30 +171,60 @@ IHWLayer::ButtonState littleNerdHW::getButtonState(uint8_t number) {
 
 
 /**** TRIGGER ****/
-void littleNerdHW::setTrigger(uint8_t number, littleNerdHW::TriggerState state, uint8_t pulseWidth){
+void littleNerdHW::setTrigger(uint8_t number, littleNerdHW::TriggerState state, uint16_t pulseWidth){
 	triggerCountdown[number]=pulseWidth;
-		if(state==ON) bitWrite(trigState,number,1);
-		if(state==OFF) bitWrite(trigState,number,0);
+	if(state==ON) bitWrite(trigState,number,1);
+	if(state==OFF) bitWrite(trigState,number,0);
 }
 
 bool littleNerdHW::getTriggerState(uint8_t number){
 		return bitRead(trigState,number);
-
 };
 
 uint8_t littleNerdHW::getKnobValue(uint8_t index){
 	return knobValues[index];
-
 }
 
 void littleNerdHW::isr_updateKnobs(){
-	static uint8_t knobCount;
+	if(fastAnalogRead::isConversionFinished()){
+	lastKnobValues[knobCount]=knobValues[knobCount];
+	knobValues[knobCount]=fastAnalogRead::getConversionResult()>>2;
+	int difference=(int)lastKnobValues[knobCount]-knobValues[knobCount];
+	difference=abs(difference);
+	if(difference>KNOB_MOVED_TOLERANCE) bitWrite(knobMovedHash,knobCount,1), unfreezeKnob(knobCount);
+	else bitWrite(knobMovedHash,knobCount,0);
+	if(inBetween(knobFreezeValues[knobCount],lastKnobValues[knobCount],knobValues[knobCount])) unfreezeKnob(knobCount);
 	knobCount++;
 	if(knobCount>=6) knobCount=0;
-	knobValues[knobCount]=analogRead(analogPin[knobCount])>>2;
-
+	fastAnalogRead::connectChannel(analogPin[knobCount]);
+	fastAnalogRead::startConversion();
+	}
+}
+void littleNerdHW::freezeAllKnobs(){
+	knobFreezeHash=255;
+}
+void littleNerdHW::freezeKnob(uint8_t index){
+	bitWrite(knobFreezeHash,index,1);
+}
+void littleNerdHW::freezeKnob(uint8_t index, uint8_t value){
+	knobFreezeValues[index]=value;
+	bitWrite(knobFreezeHash,index,1);
+}
+void littleNerdHW::unfreezeKnob(uint8_t index){
+	bitWrite(knobFreezeHash,index,0);
+}
+bool littleNerdHW::knobFreezed(uint8_t index){
+	return bitRead(knobFreezeHash,index);
+}
+bool littleNerdHW::knobMoved(uint8_t index){
+	return bitRead(knobMovedHash,index);
 }
 
+bool littleNerdHW::inBetween(uint8_t value, uint8_t border1, uint8_t border2){
+	if(value<=border1 && value>=border2) return true;
+	else if(value>=border1 && value<=border2) return true;
+	else return false;
+}
 void littleNerdHW::isr_updateTriggerStates(){
 
 	shiftRegFast::write_8bit(trigState);
@@ -209,7 +238,13 @@ void littleNerdHW::isr_updateTriggerStates(){
 	}
 
 }
+void littleNerdHW::resetTriggers(){
+	for(int i=0;i<6;i++) triggerCountdown[i]=0;
+	trigState=0;
+	//shiftRegFast::write_8bit(trigState);
+	//shiftRegFast::enableOutput();
 
+}
 void littleNerdHW::isr_updateClockIn(){
 	if(clockInCallback!=0){
 		static bool clockInState[2];
@@ -225,7 +260,7 @@ void littleNerdHW::isr_updateClockIn(){
 
 /**** TIMING ****/
 
-uint16_t littleNerdHW::getElapsedBastlCycles() {
+uint32_t littleNerdHW::getElapsedBastlCycles() {
 	return bastlCycles;
 }
 
@@ -236,10 +271,10 @@ uint16_t littleNerdHW::getBastlCyclesPerSecond() {
 
 /**** INTERRUPT ****/
 
-ISR(TIMER2_COMPA_vect) {
+ISR(TIMER2_COMPA_vect) { //56us :)
 
 
-	//bit_set(PIN);
+	bit_set(PIN);
 	hardware.incrementBastlCycles();
 	hardware.isr_updateClockIn();
 	hardware.isr_updateKnobs();
@@ -247,7 +282,7 @@ ISR(TIMER2_COMPA_vect) {
 	hardware.isr_updateButtons();      // ~1ms
 	//hardware.isr_updateNextLEDRow();   // ~84us
 
-	//bit_clear(PIN);
+	bit_clear(PIN);
 
 
 }
